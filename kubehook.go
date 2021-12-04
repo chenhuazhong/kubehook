@@ -47,14 +47,14 @@ func (h *Hook) Route(url string, f func(ctx *Ctx)) {
 func (h *Hook) Mutating(url string, f Mutatingfun) {
 	l := strings.SplitN(url, "?", 2)
 	uri := l[0]
-	h.HandlerFun[uri] = HandleMutatingFun(f)
+	h.Route(uri, HandleMutatingFun(f))
 
 }
 
 func (h *Hook) Validating(url string, f ValidateFun) {
 	l := strings.SplitN(url, "?", 2)
 	uri := l[0]
-	h.HandlerFun[uri] = HandleVlidatingFun(f)
+	h.Route(uri, HandleVlidatingFun(f))
 }
 
 func (h *Hook) Query() UrlParams {

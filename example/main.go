@@ -57,9 +57,9 @@ func main() {
 		},
 	})
 	// mutating webhook
-	h.Mutating("/pod/mutating", kubehook.Mutatingfun(func(obj runtime.Object) runtime.Object {
+	h.Mutating("/pod/mutating", func(obj runtime.Object) runtime.Object {
 		return obj
-	}))
+	})
 	// readness
 	h.Route("/health", func(ctx *kubehook.Ctx) {
 		ctx.Response(200, []byte("ok"))
