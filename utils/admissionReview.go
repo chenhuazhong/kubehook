@@ -3,7 +3,6 @@ package utils
 import (
 	"io/ioutil"
 	v1 "k8s.io/api/admission/v1"
-	"k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"net/http"
@@ -43,15 +42,9 @@ func (adm *AdmissionReviewHeadler) LoadAdmissionReview() {
 	if err != nil {
 		panic(err)
 	}
-	admission_obj, _, decode_err := adm.Deserializer.Decode(adm_json_data, nil, nil)
-	switch admission_obj.(type) {
-	case *v1.AdmissionReview:
-		admin_v1 := admission_obj.(*v1.AdmissionReview)
-		adm.Adm_obj = *admin_v1
-	case *v1beta1.AdmissionReview:
-		admin_v1 := admission_obj.(*v1.AdmissionReview)
-		adm.Adm_obj = *admin_v1
-	}
+	a := v1.AdmissionReview{}
+	_, _, decode_err := adm.Deserializer.Decode(adm_json_data, nil, &a)
+	adm.Adm_obj = a
 	if decode_err != nil {
 		panic(err)
 	}

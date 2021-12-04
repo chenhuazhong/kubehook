@@ -24,9 +24,9 @@ func (i index) Get(gvk v1.GroupVersionKind) (runtime.Object, error) {
 
 var Index = &index{
 	v1.GroupVersionKind{
-		Group:   "core",
+		Group:   "",
 		Version: "v1",
-		Kind:    "Pods",
+		Kind:    "Pod",
 	}: &v12.Pod{},
 }
 
