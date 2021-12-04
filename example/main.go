@@ -2,19 +2,20 @@ package main
 
 import (
 	"fmt"
-	kube_hook "github.com/chenhuazhong/kube-hook"
+	"github.com/chenhuazhong/kubehook"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func main() {
-	h := kube_hook.Default()
-	h.Validating("/pod/validate", kube_hook.ValidateFun{
-		ValidateUpdate: func(obj, old_obj runtime.Object) hook.RST {
+	h := kubehook.Default()
+	// validating webhook
+	h.Validating("/pod/validate", kubehook.ValidateFun{
+		ValidateUpdate: func(obj, old_obj runtime.Object) kubehook.RST {
 			pod := obj.(*v1.Pod)
 			for _, container := range pod.Spec.Containers {
 				if container.ImagePullPolicy != "IfNotPresent" {
-					return hook.RST{
+					return kubehook.RST{
 						Code:    400,
 						Result:  false,
 						Message: "pass",
@@ -22,18 +23,18 @@ func main() {
 				}
 
 			}
-			return hook.RST{
+			return kubehook.RST{
 				Code:    200,
 				Result:  true,
 				Message: "ok",
 			}
 
 		},
-		ValidateCreate: func(obj runtime.Object) hook.RST {
+		ValidateCreate: func(obj runtime.Object) kubehook.RST {
 			pod := obj.(*v1.Pod)
 			for _, container := range pod.Spec.Containers {
 				if container.ImagePullPolicy != "IfNotPresent" {
-					return hook.RST{
+					return kubehook.RST{
 						Code:    400,
 						Result:  false,
 						Message: "pass",
@@ -41,19 +42,27 @@ func main() {
 				}
 
 			}
-			return hook.RST{
+			return kubehook.RST{
 				Code:    200,
 				Result:  true,
 				Message: "ok",
 			}
 		},
-		ValidateDelete: func(obj runtime.Object) hook.RST {
-			return hook.RST{
+		ValidateDelete: func(obj runtime.Object) kubehook.RST {
+			return kubehook.RST{
 				Code:    200,
 				Result:  true,
 				Message: "ok",
 			}
 		},
+	})
+	// mutating webhook
+	h.Mutating("/pod/mutating", kubehook.Mutatingfun(func(obj runtime.Object) runtime.Object {
+		return obj
+	}))
+	// readness
+	h.Route("/health", func(ctx *kubehook.Ctx) {
+		ctx.Response(200, []byte("ok"))
 	})
 	h.Run(fmt.Sprintf("%s:%s", "0.0.0.0", "8080"), "/cert.pem", "/key.pem")
 }
