@@ -2,7 +2,6 @@ package kubehook
 
 import (
 	"context"
-	v1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"net/http"
 	"time"
@@ -20,12 +19,11 @@ type Ctx struct {
 
 	ChangeObject    runtime.Object
 	row_obj         struct{}
-	Adm_obj         v1.AdmissionReview
 	value           map[interface{}]interface{}
 	Validate_result RST
 	HandlerFunc     interface{}
 	MiddlewareIndex int
-	Request         *http.Request
+	Request         *Request
 	response        *Reponse
 	data            []byte
 }
@@ -67,8 +65,8 @@ func NewContext(time_out time.Duration, response http.ResponseWriter, request *h
 	c := &Ctx{
 		Context:    cancel,
 		CancelFunc: cancel_fun,
-		response:   &Reponse{ResponseWriter: response},
-		Request:    request,
+		response:   NewReponse(response),
+		Request:    NewRequest(request),
 	}
 	c.time = time.AfterFunc(time_out, func() {
 		c.CancelFunc()

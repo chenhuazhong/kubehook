@@ -18,3 +18,9 @@ func (res *Reponse) WriteReponse(data []byte, StatuCode int) (int, error) {
 	res.data = data
 	return res.ResponseWriter.Write(data)
 }
+
+func NewReponse(w http.ResponseWriter) *Reponse {
+	return &Reponse{
+		ResponseWriter: w,
+	}
+}
