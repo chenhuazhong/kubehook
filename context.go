@@ -60,7 +60,7 @@ func (ctx *Ctx) send() {
 }
 
 func NewContext(time_out time.Duration, response http.ResponseWriter, request *http.Request) *Ctx {
-	cancel, cancel_fun := context.WithCancel(context.TODO())
+	cancel, cancel_fun := context.WithCancel(request.Context())
 
 	c := &Ctx{
 		Context:    cancel,

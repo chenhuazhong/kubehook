@@ -7,6 +7,45 @@ import (
 	"testing"
 )
 
+func TestHook_HandleFun(t *testing.T) {
+	hook := Hook{}
+	hook.Validating("/validating", &v1.Pod{}, ValidateFun{
+		ValidateDelete: func(obj runtime.Object) RST {
+			return RST{
+				Code: 200,
+				Result: true,
+				Message: "ok",
+			}
+		},
+		ValidateCreate: func(obj runtime.Object) RST {
+			return RST{
+				Code: 200,
+				Result: true,
+				Message: "ok",
+			}
+		},
+		ValidateUpdate: func(obj, old_obj runtime.Object) RST {
+			return RST{
+				Code: 200,
+				Result: true,
+				Message: "ok",
+			}
+		},
+	})
+	hook.Mutating("/mutating", &v1.Pod{}, func(obj runtime.Object) runtime.Object {
+		return obj
+	})
+	err := hook.HandleFun(&Ctx{
+		//Request: http.Request{}
+	})
+	if err != nil{
+		t.Error(err)
+	}
+
+
+}
+
+
 func TestDefault(t *testing.T) {
 	h := Default()
 	h.Validating("/validate", &v1.Pod{}, ValidateFun{
