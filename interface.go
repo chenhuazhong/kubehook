@@ -15,3 +15,15 @@ type ResourceHook interface {
 	ValidateUpdate(obj, old_obj runtime.Object) RST
 	ValidateDelete(obj runtime.Object) RST
 }
+
+type ValidataObject interface {
+	runtime.Object
+	ValidateCreate() RST
+	ValidateUpdate(old_obj runtime.Object) RST
+	ValidateDelete(obj runtime.Object) RST
+}
+
+type MutatingObject interface {
+	runtime.Object
+	Mutating()
+}

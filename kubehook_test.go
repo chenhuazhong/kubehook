@@ -1,53 +1,18 @@
 package kubehook
 
 import (
+	"encoding/json"
 	"fmt"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"net/http/httptest"
 	"testing"
 )
 
-func TestHook_HandleFun(t *testing.T) {
-	hook := Hook{}
-	hook.Validating("/validating", &v1.Pod{}, ValidateFun{
-		ValidateDelete: func(obj runtime.Object) RST {
-			return RST{
-				Code: 200,
-				Result: true,
-				Message: "ok",
-			}
-		},
-		ValidateCreate: func(obj runtime.Object) RST {
-			return RST{
-				Code: 200,
-				Result: true,
-				Message: "ok",
-			}
-		},
-		ValidateUpdate: func(obj, old_obj runtime.Object) RST {
-			return RST{
-				Code: 200,
-				Result: true,
-				Message: "ok",
-			}
-		},
-	})
-	hook.Mutating("/mutating", &v1.Pod{}, func(obj runtime.Object) runtime.Object {
-		return obj
-	})
-	err := hook.HandleFun(&Ctx{
-		//Request: http.Request{}
-	})
-	if err != nil{
-		t.Error(err)
-	}
-
-
-}
-
-
 func TestDefault(t *testing.T) {
 	h := Default()
+	ts := httptest.NewServer(h)
+	defer ts.Close()
 	h.Validating("/validate", &v1.Pod{}, ValidateFun{
 		ValidateUpdate: func(obj, old_obj runtime.Object) RST {
 			return RST{Result: true}
@@ -67,5 +32,31 @@ func TestDefault(t *testing.T) {
 	h.Route("/health", func(ctx *Ctx) {
 		ctx.Response(200, []byte("ok"))
 	})
-	h.Run(fmt.Sprintf("%s:%s", "0.0.0.0", "8088"), "server-cert.pem", "server-key.pem")
+}
+
+type PodCopy v1.Pod
+
+func (p *PodCopy) t() {
+
+}
+func (tt *PodCopy) Validate() {
+	fmt.Println("123")
+}
+
+func TestPodCopy(t *testing.T) {
+	p := PodCopy{
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{{
+				Name: "test",
+			},
+			},
+		},
+	}
+	fmt.Println(p.GetName())
+	data, er := json.Marshal(&p)
+	if er != nil {
+		fmt.Println(er)
+	} else {
+		fmt.Println(string(data))
+	}
 }
