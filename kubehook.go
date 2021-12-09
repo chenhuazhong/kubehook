@@ -198,7 +198,6 @@ func HandleVlidatingFunv2(resource runtime.Object, f ValidateFun) func(ctx *Ctx)
 	}
 }
 
-
 func HandleMutatingFunv2(resource runtime.Object, f Mutatingfun) func(ctx *Ctx) {
 	return func(ctx *Ctx) {
 		adm_obj := v12.AdmissionReview{}
@@ -239,5 +238,93 @@ func HandleMutatingFunv2(resource runtime.Object, f Mutatingfun) func(ctx *Ctx) 
 			klog.Error(err)
 		}
 		ctx.Response(200, data)
+	}
+}
+
+func HandleMutatingFunv1(obj MutatingObject) func(ctx *Ctx) {
+	return func(ctx *Ctx) {
+		adm_obj := v12.AdmissionReview{}
+		err := json.Unmarshal(ctx.Request.Data(), &adm_obj)
+		if err != nil {
+			klog.Error(err)
+			ctx.Response(400, []byte(err.Error()))
+			return
+		}
+		err = json.Unmarshal(adm_obj.Request.Object.Raw, obj)
+		if err != nil {
+			ctx.Response(400, []byte(err.Error()))
+			return
+		}
+		ctx.Object = obj.DeepCopyObject()
+		obj.Mutating()
+		ctx.ChangeObject = obj
+		adm_return := v12.AdmissionReview{}
+		var PatchTypeJSONPatch v12.PatchType = "JsonPath"
+		data, err := json.Marshal(ctx.ChangeObject)
+		if err != nil {
+			klog.Error(err)
+		}
+		patch, e := jsonpatch.CreatePatch(adm_obj.Request.Object.Raw, data)
+		if e != nil {
+			klog.Error(e)
+		}
+		path_byte_data, _ := json.Marshal(patch)
+		adm_return.Response = &v12.AdmissionResponse{
+			Patch:     path_byte_data,
+			PatchType: &PatchTypeJSONPatch,
+			UID:       adm_obj.Request.UID,
+			Allowed:   true,
+		}
+		data, err = json.Marshal(adm_return)
+		if err != nil {
+			klog.Error(err)
+		}
+		ctx.Response(200, data)
+	}
+}
+
+func HandleVlidatingFunv1(obj ValidataObject) func(ctx *Ctx) {
+
+	return func(ctx *Ctx) {
+		adm_obj := v12.AdmissionReview{}
+		err := json.Unmarshal(ctx.Request.Data(), &adm_obj)
+		if err != nil {
+			klog.Error(err)
+			ctx.Response(400, []byte(err.Error()))
+			return
+		}
+		err = json.Unmarshal(adm_obj.Request.Object.Raw, obj)
+		if err != nil {
+			klog.Error(err)
+			ctx.Response(400, []byte(err.Error()))
+			return
+		}
+		ctx.Object = obj
+		var ret RST
+		if adm_obj.Request.Operation == "CREATE" {
+			ret = obj.ValidateCreate()
+		} else if adm_obj.Request.Operation == "UPDATE" {
+			ret = obj.ValidateUpdate(ctx.Old_Object)
+		} else {
+			ret = obj.ValidateDelete(ctx.Object)
+		}
+		ctx.Validate_result = ret
+		adm_return := v12.AdmissionReview{}
+		c := &v12.AdmissionResponse{
+			Allowed: ctx.Validate_result.Result,
+			Result: &metav1.Status{
+				Code:    ctx.Validate_result.Code,
+				Message: ctx.Validate_result.Message,
+			},
+		}
+		adm_return.Response = c
+		adm_return_data, err := json.Marshal(adm_return)
+		if err != nil {
+			klog.Error(err)
+			// todo return  false
+			ctx.Response(400, []byte(err.Error()))
+		} else {
+			ctx.Response(200, adm_return_data)
+		}
 	}
 }
