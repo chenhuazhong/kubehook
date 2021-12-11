@@ -55,6 +55,19 @@ func (h *Hook) Validating(url string, resource runtime.Object, f ValidateFun) {
 	h.Route(uri, HandleVlidatingFunv2(resource, f))
 }
 
+func (h *Hook) Mutatingv1(url string, resource MutatingObject) {
+	l := strings.SplitN(url, "?", 2)
+	uri := l[0]
+	h.Route(uri, HandleMutatingFunv1(resource))
+}
+
+func (h *Hook) Validatingv1(url string, resource ValidataObject) {
+	l := strings.SplitN(url, "?", 2)
+	uri := l[0]
+	h.Route(uri, HandleMutatingFunv1(resource))
+}
+
+
 func (h *Hook) Query() UrlParams {
 	return h.urlparams
 }
