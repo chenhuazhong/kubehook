@@ -85,3 +85,28 @@ func TestHook_HandleFun(t *testing.T) {
 	})
 	h.Run("0.0.0.0:6443", "/home/huazhong/github/k8s-webhook-cert-manager/cert.pem", "/home/huazhong/github/k8s-webhook-cert-manager/key.pem")
 }
+
+func TestHook_Buildconfiguration(t *testing.T) {
+	pod := v1.Pod{}
+	h := Default()
+	h.Validating("/validate", &pod, ValidateFun{
+		ValidateUpdate: func(obj, old_obj runtime.Object) error {
+			return errors.New("No permission")
+		},
+		ValidateDelete: func(obj runtime.Object) error {
+			return nil
+		},
+		ValidateCreate: func(obj runtime.Object) error {
+			return nil
+		},
+	})
+	h.Mutating("/pod-mutating-sidecar?timeout=30s", &pod, func(obj runtime.Object) runtime.Object {
+		pod := obj.(*v1.Pod)
+		pod.Spec.Containers[0].Name = "test"
+		return pod
+	})
+	h.Route("/health", func(ctx *Ctx) {
+		ctx.Response(200, []byte("ok"))
+	})
+	h.LoadMutatingWebhookConfiguration("kubehook", "default", 8080)
+}

@@ -2,15 +2,19 @@ package kubehook
 
 import (
 	"encoding/json"
+	"gopkg.in/yaml.v2"
+	v1 "k8s.io/api/admissionregistration/v1"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
 	"gomodules.xyz/jsonpatch/v2"
 	v12 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
-	"net/http"
-	"strconv"
-	"strings"
-	"time"
 )
 
 func Default(middlewares ...MiddleWare) *Hook {
@@ -149,6 +153,123 @@ func (h *Hook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 1.5 自定义 中间件
 	//
 	// 2、视图函数
+}
+
+func (h *Hook) Buildconfiguration(Service, Namespce string, Port int32) ([]byte, []byte, error) {
+	Ignore := v1.Ignore
+	AllScopes := v1.AllScopes
+	mutatingWebhookList := []v1.MutatingWebhook{}
+	validatingWebhookList := []v1.ValidatingWebhook{}
+	for uri, webhook := range h.handlerFun {
+		switch webhook.(type) {
+		case *MutatingWebhook:
+			mutatingWebhookList = append(mutatingWebhookList, v1.MutatingWebhook{
+				Name: uri,
+				ClientConfig: v1.WebhookClientConfig{
+					CABundle: []byte("cacert"),
+					Service: &v1.ServiceReference{
+						Path:      &uri,
+						Name:      Service,
+						Namespace: Namespce,
+						Port:      &Port,
+					},
+				},
+				FailurePolicy: &Ignore,
+				Rules: []v1.RuleWithOperations{
+					{
+						Operations: []v1.OperationType{v1.Create, v1.Update},
+						Rule: v1.Rule{
+							APIGroups:   []string{webhook.GetObject().GetObjectKind().GroupVersionKind().Group},
+							APIVersions: []string{webhook.GetObject().GetObjectKind().GroupVersionKind().Version},
+							Resources:   []string{webhook.GetObject().GetObjectKind().GroupVersionKind().Kind + "s"},
+							Scope:       &AllScopes,
+						},
+					},
+				},
+				AdmissionReviewVersions: []string{"v1"},
+			},
+			)
+		case *ValidateWebhook:
+			validatingWebhookList = append(validatingWebhookList, v1.ValidatingWebhook{
+				Name: uri,
+				ClientConfig: v1.WebhookClientConfig{
+					CABundle: []byte("cacert"),
+					Service: &v1.ServiceReference{
+						Path:      &uri,
+						Name:      Service,
+						Namespace: Namespce,
+						Port:      &Port,
+					},
+				},
+				FailurePolicy: &Ignore,
+				Rules: []v1.RuleWithOperations{
+					{
+						Operations: []v1.OperationType{v1.Create, v1.Update},
+						Rule: v1.Rule{
+							APIGroups:   []string{webhook.GetObject().GetObjectKind().GroupVersionKind().Group},
+							APIVersions: []string{webhook.GetObject().GetObjectKind().GroupVersionKind().Version},
+							Resources:   []string{webhook.GetObject().GetObjectKind().GroupVersionKind().Kind + "s"},
+							Scope:       &AllScopes,
+						},
+					},
+				},
+				AdmissionReviewVersions: []string{"v1"},
+			},
+			)
+		}
+	}
+	mutatingConfig := v1.MutatingWebhookConfiguration{
+		metav1.TypeMeta{
+			APIVersion: "admissionregistration.k8s.io/v1",
+			Kind:       "MutatingWebhookConfiguration",
+		},
+		metav1.ObjectMeta{
+			Name: "kubehook",
+		},
+		mutatingWebhookList,
+	}
+	validatingConfig := v1.ValidatingWebhookConfiguration{
+		metav1.TypeMeta{
+			APIVersion: "admissionregistration.k8s.io/v1",
+			Kind:       "ValidatingWebhookConfiguration",
+		},
+		metav1.ObjectMeta{
+			Name: "kubehook",
+		},
+		validatingWebhookList,
+	}
+
+	muData, err := json.Marshal(mutatingConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	vaData, err := json.Marshal(validatingConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	return muData, vaData, nil
+}
+
+func (h *Hook) LoadMutatingWebhookConfiguration(Service, Namespce string, Port int32) {
+	muData, vaData, err := h.Buildconfiguration(Service, Namespce, Port)
+	webhookconfiglist := []map[string]interface{}{}
+	muwebhookconfig := make(map[string]interface{})
+	vawebhookconfig := make(map[string]interface{})
+	_ = json.Unmarshal(muData, &muwebhookconfig)
+	_ = json.Unmarshal(vaData, &vawebhookconfig)
+	webhookconfiglist = append(webhookconfiglist, muwebhookconfig, vawebhookconfig)
+	Data, err := yaml.Marshal(webhookconfiglist)
+	if err != nil {
+		klog.Error(err)
+	} else {
+		f, err := os.OpenFile("./webhook-config.yaml", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			klog.Error(err)
+		} else {
+			_, err := f.Write(Data)
+			klog.Error(err)
+		}
+	}
 }
 
 func HandleVlidatingFunv2(resource runtime.Object, f ValidateFun) func(ctx *Ctx) {

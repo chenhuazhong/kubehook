@@ -63,11 +63,24 @@ func (w *WebHook) do(ctx *Ctx) {
 	w.HandlerFun(ctx)
 }
 
+func (f *WebHook) GetObject() runtime.Object {
+	return nil
+}
+
+func (f *WebHook) GetGVK() string {
+	return ""
+}
+
 type ValidateWebhook struct {
+	metav1.GroupVersionKind
 	runtime.Object
 	ValidateUpdate func(obj, old_obj runtime.Object) error
 	ValidateDelete func(obj runtime.Object) error
 	ValidateCreate func(obj runtime.Object) error
+}
+
+func (f *ValidateWebhook) GetObject() runtime.Object {
+	return f.Object
 }
 
 func (f *ValidateWebhook) do(ctx *Ctx) {
@@ -125,9 +138,22 @@ func (f *ValidateWebhook) do(ctx *Ctx) {
 	}
 }
 
+func (f *ValidateWebhook) GetGVK() string {
+	return f.GroupVersionKind.String()
+}
+
 type MutatingWebhook struct {
+	metav1.GroupVersionKind
 	runtime.Object
 	Mutatingfun func(obj runtime.Object) runtime.Object
+}
+
+func (f *MutatingWebhook) GetObject() runtime.Object {
+	return f.Object
+}
+
+func (f *MutatingWebhook) GetGVK() string {
+	return f.GroupVersionKind.String()
 }
 
 func (w *MutatingWebhook) do(ctx *Ctx) {

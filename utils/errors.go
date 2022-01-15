@@ -11,3 +11,7 @@ func (err *TypeError) Error() string {
 func (err *TypeError) String() string {
 	return err.Message
 }
+
+const L = "sd"
+
+var LL = "sd"
