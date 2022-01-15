@@ -2,6 +2,8 @@ package kubehook
 
 import (
 	"encoding/json"
+	"fmt"
+	"github.com/chenhuazhong/kubehook/metrics"
 	"github.com/chenhuazhong/kubehook/utils"
 	"gopkg.in/yaml.v2"
 	v1 "k8s.io/api/admissionregistration/v1"
@@ -37,7 +39,7 @@ func (h *Hook) Run(addr, certFile, keyFile string) {
 	klog.Infof("cert.pem path: %s", certFile)
 	klog.Infof("key.pem path: %s", keyFile)
 	klog.Infof("hook server listening at: %s", addr)
-
+	go metrics.MetricsService(fmt.Sprintf("%s:%s", "0.0.0.0", "8080"))
 	err := http.ListenAndServeTLS(addr, certFile, keyFile, h)
 	if err != nil {
 		klog.Error(err)
