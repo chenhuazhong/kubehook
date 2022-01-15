@@ -16,14 +16,14 @@ import (
 func Default(middlewares ...MiddleWare) *Hook {
 	s := &Hook{
 		Middleware: middlewares,
-		HandlerFun: make(map[string]func(ctx *Ctx)),
+		handlerFun: make(map[string]webHook),
 	}
 	return s
 }
 
 type Hook struct {
 	urlparams  UrlParams
-	HandlerFun map[string]func(ctx *Ctx)
+	handlerFun map[string]webHook
 	Middleware []MiddleWare
 }
 
@@ -40,19 +40,27 @@ func (h *Hook) Run(addr, certFile, keyFile string) {
 }
 
 func (h *Hook) Route(url string, f func(ctx *Ctx)) {
-	h.HandlerFun[url] = f
+	h.handlerFun[url] = &WebHook{HandlerFun: f}
 }
 
 func (h *Hook) Mutating(url string, resource runtime.Object, f Mutatingfun) {
 	l := strings.SplitN(url, "?", 2)
 	uri := l[0]
-	h.Route(uri, HandleMutatingFunv2(resource, f))
+	h.handlerFun[uri] = &MutatingWebhook{
+		Object:      resource,
+		Mutatingfun: f,
+	}
 }
 
 func (h *Hook) Validating(url string, resource runtime.Object, f ValidateFun) {
 	l := strings.SplitN(url, "?", 2)
 	uri := l[0]
-	h.Route(uri, HandleVlidatingFunv2(resource, f))
+	h.handlerFun[uri] = &ValidateWebhook{
+		Object:         resource,
+		ValidateCreate: f.ValidateCreate,
+		ValidateUpdate: f.ValidateUpdate,
+		ValidateDelete: f.ValidateDelete,
+	}
 }
 
 func (h *Hook) Mutatingv1(url string, resource MutatingObject) {
@@ -64,9 +72,8 @@ func (h *Hook) Mutatingv1(url string, resource MutatingObject) {
 func (h *Hook) Validatingv1(url string, resource ValidataObject) {
 	l := strings.SplitN(url, "?", 2)
 	uri := l[0]
-	h.Route(uri, HandleMutatingFunv1(resource))
+	h.Route(uri, HandleVlidatingFunv1(resource))
 }
-
 
 func (h *Hook) Query() UrlParams {
 	return h.urlparams
@@ -93,34 +100,13 @@ func (h *Hook) HandleFun(ctx *Ctx) (err error) {
 
 	uri_params_list := strings.SplitN(ctx.Request.RequestURI, "?", 2)
 	uri := uri_params_list[0]
-	if _, ok := h.HandlerFun[uri]; !ok {
+	if _, ok := h.handlerFun[uri]; !ok {
 		//return 404
 		ctx.Response(404, []byte("404 not found"))
 		klog.Warningf("%s 404 not found", ctx.Request.RequestURI)
 		return nil
 	}
-
-	ctx.MiddlewareIndex = 0
-	if len(h.Middleware) > 0 {
-		for ; ctx.MiddlewareIndex < len(h.Middleware); ctx.MiddlewareIndex++ {
-			err = h.NextMiddleware(ctx)
-			if err != nil {
-				klog.Error(err)
-				break
-			}
-		}
-	}
-	if err == nil {
-		handlerfun := h.HandlerFun[uri]
-		ctx.HandlerFunc = handlerfun
-		handlerfun(ctx)
-	}
-	// func(ctx, obj runtime.Object)
-	if len(h.Middleware) > 0 {
-		for ctx.MiddlewareIndex--; ctx.MiddlewareIndex >= 0; ctx.MiddlewareIndex-- {
-			h.Middleware[ctx.MiddlewareIndex].Process_response(ctx)
-		}
-	}
+	h.handlerFun[uri].do(ctx)
 	return nil
 }
 
@@ -166,7 +152,6 @@ func (h *Hook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleVlidatingFunv2(resource runtime.Object, f ValidateFun) func(ctx *Ctx) {
-
 	return func(ctx *Ctx) {
 		adm_obj := v12.AdmissionReview{}
 		err := json.Unmarshal(ctx.Request.Data(), &adm_obj)
@@ -182,15 +167,27 @@ func HandleVlidatingFunv2(resource runtime.Object, f ValidateFun) func(ctx *Ctx)
 			return
 		}
 		ctx.Object = resource
-		var ret RST
-		if adm_obj.Request.Operation == "CREATE" {
-			ret = f.ValidateCreate(ctx.Object)
-		} else if adm_obj.Request.Operation == "UPDATE" {
-			ret = f.ValidateUpdate(ctx.Object, ctx.Old_Object)
+		var validateErr error
+		if adm_obj.Request.Operation == CREATE {
+			validateErr = f.ValidateCreate(ctx.Object)
+		} else if adm_obj.Request.Operation == UPDATE {
+			validateErr = f.ValidateUpdate(ctx.Object, ctx.Old_Object)
 		} else {
-			ret = f.ValidateDelete(ctx.Object)
+			validateErr = f.ValidateDelete(ctx.Object)
 		}
-		ctx.Validate_result = ret
+		if validateErr != nil {
+			ctx.Validate_result = RST{
+				Code:    400,
+				Message: validateErr.Error(),
+				Result:  false,
+			}
+		} else {
+			ctx.Validate_result = RST{
+				Code:    200,
+				Message: "",
+				Result:  true,
+			}
+		}
 		adm_return := v12.AdmissionReview{}
 		c := &v12.AdmissionResponse{
 			Allowed: ctx.Validate_result.Result,

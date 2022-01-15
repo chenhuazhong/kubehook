@@ -21,7 +21,6 @@ type Ctx struct {
 	row_obj         struct{}
 	value           map[interface{}]interface{}
 	Validate_result RST
-	HandlerFunc     interface{}
 	MiddlewareIndex int
 	Request         *Request
 	response        *Reponse
