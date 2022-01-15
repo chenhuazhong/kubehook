@@ -27,3 +27,9 @@ type MutatingObject interface {
 	runtime.Object
 	Mutating()
 }
+
+type webHook interface {
+	do(ctx *Ctx)
+	GetObject() runtime.Object
+	GetGVK() string
+}
