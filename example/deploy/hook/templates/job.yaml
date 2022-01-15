@@ -70,9 +70,9 @@ spec:
           command: ["./generate_certificate.sh"]
           args:
             - "--service"
-            - "no-service"
+            - "kubehook"
             - "--webhook"
-            - "e2e-test-cert-manager-webhook"
+            - "mutating-webhook-example-cfg"
             - "--secret"
             - "e2e-test-cert-manager-secret"
             - "--namespace"

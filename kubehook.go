@@ -2,6 +2,7 @@ package kubehook
 
 import (
 	"encoding/json"
+	"github.com/chenhuazhong/kubehook/utils"
 	"gopkg.in/yaml.v2"
 	v1 "k8s.io/api/admissionregistration/v1"
 	"net/http"
@@ -158,13 +159,14 @@ func (h *Hook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *Hook) Buildconfiguration(Service, Namespce string, Port int32) ([]byte, []byte, error) {
 	Ignore := v1.Ignore
 	AllScopes := v1.AllScopes
+	SideEffectClassNone := v1.SideEffectClassNone
 	mutatingWebhookList := []v1.MutatingWebhook{}
 	validatingWebhookList := []v1.ValidatingWebhook{}
 	for uri, webhook := range h.handlerFun {
-		switch webhook.(type) {
+		switch h := webhook.(type) {
 		case *MutatingWebhook:
 			mutatingWebhookList = append(mutatingWebhookList, v1.MutatingWebhook{
-				Name: uri,
+				Name: utils.RandString(6) + "." + "github.com",
 				ClientConfig: v1.WebhookClientConfig{
 					CABundle: []byte("cacert"),
 					Service: &v1.ServiceReference{
@@ -187,11 +189,22 @@ func (h *Hook) Buildconfiguration(Service, Namespce string, Port int32) ([]byte,
 					},
 				},
 				AdmissionReviewVersions: []string{"v1"},
+				SideEffects:             &SideEffectClassNone,
 			},
 			)
 		case *ValidateWebhook:
+			oplist := []v1.OperationType{}
+			if h.ValidateDelete != nil {
+				oplist = append(oplist, v1.Delete)
+			}
+			if h.ValidateUpdate != nil {
+				oplist = append(oplist, v1.Update)
+			}
+			if h.ValidateCreate != nil {
+				oplist = append(oplist, v1.Create)
+			}
 			validatingWebhookList = append(validatingWebhookList, v1.ValidatingWebhook{
-				Name: uri,
+				Name: utils.RandString(6) + "." + "github.com",
 				ClientConfig: v1.WebhookClientConfig{
 					CABundle: []byte("cacert"),
 					Service: &v1.ServiceReference{
@@ -204,7 +217,7 @@ func (h *Hook) Buildconfiguration(Service, Namespce string, Port int32) ([]byte,
 				FailurePolicy: &Ignore,
 				Rules: []v1.RuleWithOperations{
 					{
-						Operations: []v1.OperationType{v1.Create, v1.Update},
+						Operations: oplist,
 						Rule: v1.Rule{
 							APIGroups:   []string{webhook.GetObject().GetObjectKind().GroupVersionKind().Group},
 							APIVersions: []string{webhook.GetObject().GetObjectKind().GroupVersionKind().Version},
@@ -214,6 +227,7 @@ func (h *Hook) Buildconfiguration(Service, Namespce string, Port int32) ([]byte,
 					},
 				},
 				AdmissionReviewVersions: []string{"v1"},
+				SideEffects:             &SideEffectClassNone,
 			},
 			)
 		}
@@ -252,13 +266,11 @@ func (h *Hook) Buildconfiguration(Service, Namespce string, Port int32) ([]byte,
 
 func (h *Hook) LoadMutatingWebhookConfiguration(Service, Namespce string, Port int32) {
 	muData, vaData, err := h.Buildconfiguration(Service, Namespce, Port)
-	webhookconfiglist := []map[string]interface{}{}
 	muwebhookconfig := make(map[string]interface{})
 	vawebhookconfig := make(map[string]interface{})
 	_ = json.Unmarshal(muData, &muwebhookconfig)
 	_ = json.Unmarshal(vaData, &vawebhookconfig)
-	webhookconfiglist = append(webhookconfiglist, muwebhookconfig, vawebhookconfig)
-	Data, err := yaml.Marshal(webhookconfiglist)
+
 	if err != nil {
 		klog.Error(err)
 	} else {
@@ -266,8 +278,21 @@ func (h *Hook) LoadMutatingWebhookConfiguration(Service, Namespce string, Port i
 		if err != nil {
 			klog.Error(err)
 		} else {
-			_, err := f.Write(Data)
-			klog.Error(err)
+			Data, err := yaml.Marshal(muwebhookconfig)
+			if err != nil {
+				klog.Error(err)
+			} else {
+				_, err := f.Write(Data)
+				klog.Error(err)
+			}
+			Data, err = yaml.Marshal(vawebhookconfig)
+			if err != nil {
+				klog.Error(err)
+			} else {
+				f.Write([]byte("---\n"))
+				_, err := f.Write(Data)
+				klog.Error(err)
+			}
 		}
 	}
 }
